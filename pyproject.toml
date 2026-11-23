@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "frictional"
+version = "0.1.0"
+description = "Read-only STEM artifact and process-evidence audit"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+frictional = "frictional_cli:main"
+stem-review = "stem_project_review:main"
+
+[tool.setuptools]
+py-modules = ["frictional_cli", "frictional_reporting", "process_evidence", "stem_project_review", "reporting"]
+
+[tool.setuptools.data-files]
+"share/frictional" = ["frictional.schema.json", "report.schema.json"]
+"share/frictional/profiles" = ["profiles/*.md", "profiles/*.json"]
+"share/frictional/skills/frictional" = ["skills/frictional/SKILL.md"]
+"share/frictional/skills/frictional/references" = ["skills/frictional/references/*.md"]
+"share/frictional/skills/stem-project-review" = ["skills/stem-project-review/SKILL.md"]
+"share/frictional/skills/stem-project-review/references" = ["skills/stem-project-review/references/*.md"]

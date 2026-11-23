@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "STEM Project Review report",
+  "description": "Review record for one source target. IDs must be unique within each of checks and findings; the Python validator enforces uniqueness.",
+  "$defs": {
+    "text": {
+      "type": "string",
+      "pattern": "\\S"
+    },
+    "evidence": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/text"
+        },
+        "observation": {
+          "$ref": "#/$defs/text"
+        },
+        "line": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        }
+      },
+      "required": [
+        "path",
+        "observation"
+      ]
+    },
+    "check": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/text"
+        },
+        "title": {
+          "$ref": "#/$defs/text"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "checked",
+            "passed",
+            "failed",
+            "blocked",
+            "not_assessed",
+            "not_applicable"
+          ]
+        },
+        "detail": {
+          "$ref": "#/$defs/text"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/text"
+              },
+              {
+                "$ref": "#/$defs/evidence"
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "status",
+        "detail",
+        "evidence"
+      ]
+    },
+    "finding": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/text"
+        },
+        "title": {
+          "$ref": "#/$defs/text"
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "high",
+            "medium",
+            "low",
+            "info"
+          ]
+        },
+        "confidence": {
+          "type": "string",
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "why_it_matters": {
+          "$ref": "#/$defs/text"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidence"
+          },
+          "minItems": 1
+        },
+        "recommended_action": {
+          "$ref": "#/$defs/text"
+        },
+        "acceptance_checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/text"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "severity",
+        "confidence",
+        "why_it_matters",
+        "evidence",
+        "recommended_action",
+        "acceptance_checks"
+      ]
+    }
+  },
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "target": {
+      "type": "object"
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/check"
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/finding"
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "target",
+    "checks",
+    "findings"
+  ]
+}

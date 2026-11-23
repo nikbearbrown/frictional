@@ -1,0 +1,224 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Frictional report",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "skill_version",
+    "created_at",
+    "target",
+    "model",
+    "dimensions",
+    "limitations"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "skill_version": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "created_at": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "target": {
+      "type": "object",
+      "description": "Only safe, redacted assessment metadata. Never include secrets or raw logs."
+    },
+    "model": {
+      "type": "object",
+      "required": [
+        "name",
+        "version"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "dimensions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/dimension"
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    }
+  },
+  "description": "Frictional v1; no grading. Dimension IDs must be unique (checked at runtime). Missing evidence does not imply absence of learning. Only redacted, necessary observations and locators may be included.",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "dimensions": {
+            "contains": {
+              "properties": {
+                "interpretations": {
+                  "minItems": 1
+                }
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "model": {
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "version": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "dimension": {
+      "type": "object",
+      "required": [
+        "id",
+        "family",
+        "version",
+        "status",
+        "facts",
+        "interpretations"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "family": {
+          "enum": [
+            "artifact",
+            "process"
+          ]
+        },
+        "version": {
+          "type": "integer",
+          "const": 1
+        },
+        "status": {
+          "enum": [
+            "reported",
+            "no_evidence",
+            "blocked",
+            "not_applicable",
+            "not_assessed",
+            "hidden_by_instructor"
+          ]
+        },
+        "facts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidence"
+          }
+        },
+        "interpretations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidence"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "not": {
+                  "const": "reported"
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "facts": {
+                "maxItems": 0
+              },
+              "interpretations": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "evidence": {
+      "type": "object",
+      "required": [
+        "observation",
+        "locator",
+        "alternative_explanations"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "observation": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "locator": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "alternative_explanations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          }
+        }
+      }
+    }
+  }
+}
