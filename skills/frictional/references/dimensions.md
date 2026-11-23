@@ -85,10 +85,28 @@ Use this catalog for an authorized static audit. The IDs are stable, not a ranki
 - **Example:** A commit date is before the supplied deadline; without server or submission logs, push timing cannot be determined.
 
 ### install-test
-- **Purpose:** Summarize readiness documentation and separately attest any independent install/run evidence.
-- **Input:** Setup instructions, lockfiles and environment constraints; for attestation, an authorized external-sandbox record with exact revision, commands, environment, timestamp, outcome, and relevant logs.
-- **Confound:** A clean setup on one machine does not prove portability; documentation, CI badge, or contributor testimony is not a substitute for the defined independent attestation. The audit never executes the target.
-- **Example:** Instructions and dependencies were observed, but no scoped external install record was supplied; report setup documentation separately from the unverified install.
+- **Purpose:** Record whether the project installs on a clean Linux machine from its own instructions.
+- **Input:** With `--run`, the setup phase of Frictional's own container run (commands, their README sources, exit codes, seconds, logs). Otherwise an authorized external-sandbox record with exact revision, commands, environment, timestamp, outcome, and relevant logs.
+- **Confound:** A clean container is not the author's machine; a failure can come from an undocumented prerequisite, a registry outage or an architecture difference (this Mac's containers are arm64). A pass does not prove portability to other systems. Commands Frictional guessed from a manifest test the manifest, not the README.
+- **Example:** `pip install -r requirements.txt` from README.md:12 failed in python:3.12-slim because a package needs a C compiler the README does not mention.
+
+### run-check
+- **Purpose:** Record whether the documented run and test commands work after a clean install.
+- **Input:** The run and test phases of the container run, with each command's source and outcome.
+- **Confound:** Passing tests show what the tests check, not that the main path works. A run command that exits 0 may print nothing useful. Network is off after setup by default, so an app that needs the internet fails for that reason.
+- **Example:** The documented command printed a count and exited 0; the tests passed but none exercises the file-reading path.
+
+### test-history
+- **Purpose:** Show the sequence of test outcomes across the folder's recent commits (evidence for the GLP error-trajectory component, Y2).
+- **Input:** The test commands run at each of the last N commits that touched the folder, oldest first, with failure categories (syntax, dependency, assertion, build, timeout, other).
+- **Confound:** Older commits run with dependencies installed for the current revision. Tests added late make early commits look like failures. Whether the errors follow the structure of the concept needs a reader.
+- **Example:** Five commits: syntax failure, assertion failure, assertion failure, pass, pass; two category changes and one fail-to-pass transition.
+
+### serve-check
+- **Purpose:** Record whether an app started by the spec's serve command answered on its port.
+- **Input:** The serve command, port, path and the HTTP answer within 60 seconds.
+- **Confound:** An answer is not a working feature; it is the precondition for capturing one. Apps bound to 127.0.0.1 inside a container do not answer from outside it.
+- **Example:** `python app.py --host 0.0.0.0` answered on port 8000 with status 200 after 3 seconds.
 
 ### readme-completeness
 - **Purpose:** Check whether the front door explains what the artifact does and how a reader can use or inspect it.
@@ -169,3 +187,35 @@ Use this catalog for an authorized static audit. The IDs are stable, not a ranki
 - **Input:** Supplied starter and instructions, approved help and example materials, timestamps where relevant, and scoped deltas.
 - **Confound:** Similarity to a starter may be expected; absent scaffolding records do not prove solo or unaided work. Do not infer tool use from code style.
 - **Example:** A starter supplied chart axes and labels; the changed data transform is a separate observation, not a claim about how it was produced.
+
+## Course process files
+
+### log-rubric-rows
+- **Purpose:** Show, per FRICTIONAL.md, how many entries fill each of the course rubric's five rows: Attempts; Friction and response; Human and AI contributions; Learning and uncertainty; Traceable process.
+- **Input:** Template-labelled entries (labels matched by meaning), dates, retrospective marks, commit references and evidence links. No log text is retained.
+- **Confound:** Filled is not specific. The rubric's specific (2), vague (1), absent (0) judgment needs a reader. Unlabelled prose entries can meet the rubric and are counted separately.
+- **Example:** 6 entries; Friction and response filled in 3 of 6; the instructor notes list the lines of the other 3.
+
+### log-commit-consistency
+- **Purpose:** Compare the log's dates with the days the folder was committed to (one-day tolerance).
+- **Input:** FRICTIONAL.md entry dates and first-parent commit author dates for the folder.
+- **Confound:** Work happens without commits and commits without log-worthy events. Commit dates are editable and UTC here. A mismatch is a question to ask, never a finding of dishonesty.
+- **Example:** Log dates within a day of a commit: 4/5. Commit days within a day of a log entry: 4/7; the instructor notes list the three quiet commit days.
+
+### prediction-log
+- **Purpose:** Read PREDICTIONS.md for the preprint's calibration component (Y4) from the student's own records.
+- **Input:** Each prediction's confidence (numeric if written as 70%, 0.7 or 7/10), after-run notes, and an optional "Prediction held: yes / partly / no" line.
+- **Confound:** A handful of predictions is too few to measure calibration; students choose which predictions to write down and mark their own outcomes.
+- **Example:** 4 predictions, 3 with numeric confidence and a yes/no outcome: mean confidence 0.80, share held 0.67, mean squared error 0.21, +0.13 (more confident than right).
+
+### verification-notes
+- **Purpose:** Show which VERIFICATION.md template fields are filled, especially failed checks and the revision that followed (Y2), and whether the candidate commit is in the history.
+- **Input:** The course VERIFICATION.md template fields.
+- **Confound:** A filled field describes checks; it does not show they ran. Pair it with the container run.
+- **Example:** 9 of 11 fields filled; failed checks and revision: filled; candidate commit found in this folder's history.
+
+### contributions-log
+- **Purpose:** Show which CONTRIBUTIONS.md fields are filled, whether the AI model is named, and whether accepted, changed or rejected decisions are described.
+- **Input:** The course CONTRIBUTIONS.md template fields.
+- **Confound:** The file is the student's account. It is not checked against chat records, which Frictional never reads.
+- **Example:** 7 of 7 fields filled; model named: yes; decisions described: filled.

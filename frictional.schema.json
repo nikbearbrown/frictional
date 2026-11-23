@@ -15,7 +15,10 @@
   "properties": {
     "schema_version": {
       "type": "integer",
-      "const": 1
+      "enum": [
+        1,
+        2
+      ]
     },
     "skill_version": {
       "type": "string",
@@ -78,9 +81,39 @@
         "minLength": 1,
         "pattern": "\\S"
       }
+    },
+    "mode": {
+      "enum": [
+        "student",
+        "instructor"
+      ]
+    },
+    "glp": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "items": {
+        "$ref": "#/$defs/glp"
+      }
+    },
+    "next_steps": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/next_step"
+      }
+    },
+    "run": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/run"
+        }
+      ]
     }
   },
-  "description": "Frictional v1; no grading. Dimension IDs must be unique (checked at runtime). Missing evidence does not imply absence of learning. Only redacted, necessary observations and locators may be included.",
+  "description": "Frictional v1 and v2; no grading. Version 2 adds mode, the seven GLP components with their evidence sources (never a GLP score), prioritized next steps with acceptance checks, and an optional container-run summary. Dimension IDs must be unique (checked at runtime). Missing evidence does not imply absence of learning. Only redacted, necessary observations and locators may be included.",
   "allOf": [
     {
       "if": {
@@ -112,6 +145,31 @@
               }
             }
           }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "schema_version": {
+            "const": 2
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "mode",
+          "glp",
+          "next_steps",
+          "run"
+        ]
+      },
+      "else": {
+        "properties": {
+          "mode": false,
+          "glp": false,
+          "next_steps": false,
+          "run": false
         }
       }
     }
@@ -216,6 +274,154 @@
             "type": "string",
             "minLength": 1,
             "pattern": "\\S"
+          }
+        }
+      }
+    },
+    "glp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "status",
+        "sources",
+        "note"
+      ],
+      "properties": {
+        "id": {
+          "enum": [
+            "Y1",
+            "Y2",
+            "Y3",
+            "Y4",
+            "Y5",
+            "Y6",
+            "Y7"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "status": {
+          "enum": [
+            "evidence_recorded",
+            "no_evidence",
+            "needs_course_data"
+          ]
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "status"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "status": {
+                "enum": [
+                  "reported",
+                  "no_evidence",
+                  "blocked",
+                  "not_applicable",
+                  "not_assessed",
+                  "hidden_by_instructor"
+                ]
+              }
+            }
+          }
+        },
+        "note": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        }
+      }
+    },
+    "next_step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "priority",
+        "dimension",
+        "locator",
+        "change",
+        "check"
+      ],
+      "properties": {
+        "priority": {
+          "enum": [
+            "P0",
+            "P1",
+            "P2"
+          ]
+        },
+        "dimension": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "locator": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "change": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "check": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        }
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runtime",
+        "image",
+        "outcomes",
+        "receipt",
+        "spec_source"
+      ],
+      "properties": {
+        "runtime": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "image": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "receipt": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "spec_source": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "outcomes": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
           }
         }
       }

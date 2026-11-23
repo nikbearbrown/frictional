@@ -2,10 +2,13 @@ import contextlib
 import io
 import json
 from pathlib import Path
+import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 
-from frictional_cli import ARTIFACT, PROCESS, audit_folder, main, verification_record
+from frictional_cli import ARTIFACT, PROCESS, VERSION, audit_folder, main, verification_record
 from frictional_reporting import validate_report
 
 
@@ -92,6 +95,39 @@ class FrictionalIntegration(unittest.TestCase):
         packet["runs"][0]["raw_log"] = "not part of the contract"
         with self.assertRaises(ValueError):
             verification_record(packet, "a"*40)
+
+
+class LauncherPythonChoice(unittest.TestCase):
+    """./frictional must skip a python3 older than 3.10 and explain a missing one."""
+
+    def setUp(self):
+        self.space = tempfile.TemporaryDirectory()
+        self.addCleanup(self.space.cleanup)
+        self.bin = Path(self.space.name)
+        dirname = shutil.which("dirname")
+        if dirname is None:
+            self.skipTest("dirname not found")
+        (self.bin / "dirname").symlink_to(dirname)
+        self.launcher = Path(__file__).resolve().parent / "frictional"
+
+    def run_launcher(self):
+        return subprocess.run([str(self.launcher), "--version"], capture_output=True, text=True,
+                              env={"PATH": str(self.bin)}, timeout=60)
+
+    def test_uses_newer_python_when_python3_is_too_old(self):
+        old = self.bin / "python3"
+        old.write_text("#!/bin/sh\necho 'old python ran' >&2\nexit 1\n")
+        old.chmod(0o755)
+        (self.bin / "python3.12").symlink_to(sys.executable)
+        result = self.run_launcher()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(VERSION, result.stdout)
+        self.assertNotIn("old python ran", result.stderr)
+
+    def test_explains_when_no_python3_exists(self):
+        result = self.run_launcher()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("needs Python 3.10 or newer", result.stderr)
 
 
 if __name__ == "__main__":

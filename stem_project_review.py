@@ -1,6 +1,13 @@
 """Read-only STEM review inventory and report CLI. Standard library only."""
 from __future__ import annotations
 
+import sys
+
+if sys.version_info < (3, 10):
+    sys.exit("stem-review: needs Python 3.10 or newer; this is Python %d.%d.%d.\n"
+             "Install a newer Python from https://www.python.org/downloads/ "
+             "(on a Mac, also: brew install python), then run the command again." % sys.version_info[:3])
+
 import argparse
 import json
 import os
@@ -9,7 +16,6 @@ import re
 import shutil
 import stat
 import subprocess
-import sys
 import tempfile
 
 from reporting import validate_report, write_reports

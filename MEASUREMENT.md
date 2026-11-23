@@ -5,6 +5,9 @@ An audit records evidence about the project and separately describes work traces
 | Dimension | Record | Keep separate |
 | --- | --- | --- |
 | STEM quality | Requirements tested, representative path, actual environment and result, claim and evidence; reviewer interprets fit and material gaps | Tests discovered vs tests executed vs behavior verified; statistical/methodological validity vs clear presentation |
+| Container run (install, run, test, serve) | Commands with their README sources, exit codes, seconds and masked logs, in a fresh Linux container | A clean container vs. the author's machine; guessed commands vs. documented ones; tests passing vs. the main path working |
+| Test history (Y2) | Test outcome at each of the last N commits, failure categories, transitions | Current dependencies vs. those at the time; tests added late; error coherence needs a reader |
+| Course files | FRICTIONAL.md rubric rows filled, dates vs. commits, PREDICTIONS.md calibration arithmetic, VERIFICATION.md and CONTRIBUTIONS.md fields | Filled vs. specific; the student's account vs. what happened; no text retained |
 | Commit history | Bounded visible first-parent count, covered revision and coverage, distinct UTC activity-date labels, time span, timestamp gaps and deadline window when supplied | Time on task, side-branch effort, changes not in Git, squashed or rebased work |
 | Push and team history | Supplied server events; distinct recorded author metadata and aggregate distribution | Git dates vs server arrival, contributors vs people who committed, no individual ranking |
 | Verification evidence | Cited run, revision, test scope and result | Checking now vs a historical record; passing irrelevant tests; concise supported notes vs unsupported prose |
@@ -39,3 +42,7 @@ Supply a normalized attachment only for records you can inspect and are authoriz
 ```
 
 The synthetic regression tests hold the artifact fixed while varying the record: a supported check, no historical evidence, a cited run that misses the main path, and an equally supported minimal record. Equal evidence gets equal treatment regardless of prose length. These are tool checks, not benchmark or classroom findings.
+
+## The seven GLP components
+
+Every report includes a table mapping the preprint's components (Y1 to Y7) to the dimensions that can carry evidence for each, and marks four of them (Y1, Y3, Y6, Y7) as needing course data that a repository cannot hold. Where course data is supplied, the packets compute the preprint's own descriptive quantities: Y1's difficulty–time correlation, Y3's near–far gap and 0.4/0.6 weighting, Y4's Brier score and direction, Y7's (hint − none) / (worked − none) ratio. None is combined into a GLP score, and none is a validated measure: the preprint's validation study has not been done.

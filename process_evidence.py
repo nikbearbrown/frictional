@@ -51,6 +51,9 @@ DIMENSIONS = (
     "naming-conventions", "repo-hygiene", "template-delta",
     "contribution-distribution", "process-log", "error-trajectory",
     "temporal-engagement", "transfer", "calibration", "retrieval", "scaffolding",
+    # course process files (course_evidence.COURSE_DIMENSIONS)
+    "log-rubric-rows", "log-commit-consistency", "prediction-log",
+    "verification-notes", "contributions-log",
 )
 MAX_ENTRIES = 3000
 MAX_OBSERVATIONS = 500
@@ -740,6 +743,12 @@ def structured(dimension, value, head=None):
             return absent()
         text = ", ".join(f"{d}: {len(grouped[d])} interval(s), {sum(grouped[d]):.2f} elapsed h"
                          for d in ("low","medium","high") if d in grouped)
+        pairs = [(rank, h) for rank, d in enumerate(("low", "medium", "high"), 1) for h in grouped.get(d, [])]
+        r = pearson(pairs)
+        if r is not None:
+            text += (f"; correlation between difficulty (low 1, medium 2, high 3) and interval hours across "
+                     f"{len(pairs)} intervals: r = {r:+.2f} (the preprint's Y1 uses item-level time on task; "
+                     f"milestone intervals are a coarser stand-in)")
         return reported(fact(f"Supplied milestone intervals by difficulty: {text}.", locator,
                              "Ranges include gaps, may omit offline work and are not active engagement or time-on-task.",
                              "Difficulty labels are supplied, not established by the repository."))
@@ -776,12 +785,36 @@ def structured(dimension, value, head=None):
     if not observations:
         return absent()
     summary = "; ".join(f"{g}: {v[0]}/{v[1]} marked successful" for g,v in sorted(grouped.items()))
+    rate = {g: v[0] / v[1] for g, v in grouped.items() if v[1]}
     if dimension == "calibration":
         n = len(observations)
-        summary += f"; supplied mean confidence {confidence_sum/n:.3f}; mean squared error {brier/n:.3f}"
+        summary += (f"; supplied mean confidence {confidence_sum/n:.3f}; mean squared error {brier/n:.3f}; "
+                    f"mean confidence minus share correct {confidence_sum/n - rate['all']:+.3f} "
+                    f"(positive means more confident than correct)")
+    elif dimension == "transfer" and {"near", "far"} <= rate.keys():
+        summary += (f"; near minus far {rate['near'] - rate['far']:+.3f}; "
+                    f"0.4 x near + 0.6 x far = {0.4 * rate['near'] + 0.6 * rate['far']:.3f} (the preprint's Y3 weighting)")
+    elif dimension == "scaffolding" and {"none", "hint", "worked"} <= rate.keys() and rate["worked"] != rate["none"]:
+        summary += (f"; (hint - none) / (worked - none) = "
+                    f"{(rate['hint'] - rate['none']) / (rate['worked'] - rate['none']):.3f} (the preprint's Y7 ratio)")
     return reported(fact(f"Descriptive supplied observations only: {summary}.", locator,
                          "Item mix, instructions, conditions and missing observations can change these aggregates.",
                          "No learner diagnosis, independence assumption or grading conclusion is made."))
+
+
+def pearson(pairs):
+    """Pearson correlation of (x, y) pairs, or None when undefined or fewer than three pairs."""
+    if len(pairs) < 3:
+        return None
+    n = len(pairs)
+    mx = sum(x for x, _ in pairs) / n
+    my = sum(y for _, y in pairs) / n
+    sxy = sum((x - mx) * (y - my) for x, y in pairs)
+    sxx = sum((x - mx) ** 2 for x, _ in pairs)
+    syy = sum((y - my) ** 2 for _, y in pairs)
+    if sxx <= 0 or syy <= 0:
+        return None
+    return sxy / math.sqrt(sxx * syy)
 
 
 STRUCTURED = frozenset({"push-timeline", "install-test", "error-trajectory", "temporal-engagement",
@@ -789,8 +822,13 @@ STRUCTURED = frozenset({"push-timeline", "install-test", "error-trajectory", "te
 
 
 def collect(root: Path, supplied: dict | None = None, starter: Path | None = None,
-            deadline: str | None = None) -> dict:
-    """Return explicit results with fixed-shape facts; never run project commands."""
+            deadline: str | None = None, context: dict | None = None) -> dict:
+    """Return explicit results with fixed-shape facts; never run project commands.
+
+    If `context` is a dict, it receives the commit rows, history state, folder scope
+    and file inventory for later steps (the optional container run). Those values
+    are never part of the returned results.
+    """
     root = Path(root)
     if supplied is not None and not isinstance(supplied, dict):
         raise TypeError("supplied must be a dictionary or None")
@@ -805,9 +843,28 @@ def collect(root: Path, supplied: dict | None = None, starter: Path | None = Non
         return out
     files, summary = inventory(root)
     rows, state = history(root)
+    scope = None
+    if state == "absent":
+        # A student folder inside a course repository has no .git of its own:
+        # read the enclosing repository's first-parent commits that touch it.
+        from gitcli import find_enclosing, folder_history
+        enclosing = find_enclosing(root)
+        if enclosing is not None:
+            rows, state = folder_history(*enclosing)
+            scope = enclosing[1]
     partial = not summary[-1] or bool(summary[2])
     out["commit-history"] = commit_findings(rows, state, deadline)
     out["contribution-distribution"] = contributions(rows, state)
+    if scope is not None:
+        for name in ("commit-history", "contribution-distribution"):
+            for item in out[name]["facts"]:
+                if item["locator"] == "git:HEAD:first-parent":
+                    item["locator"] = f"git:HEAD:first-parent -- {scope}"
+            if out[name]["status"] == "reported":
+                out[name]["facts"].append(fact(
+                    "Commits counted are those in the enclosing repository that touch this folder.",
+                    f"git:HEAD:first-parent -- {scope}",
+                    "Work committed from another folder, or moved in from elsewhere, is not attributed to this folder."))
     out["readme-completeness"] = readme(root, files, partial)
     out["naming-conventions"] = naming(files, partial)
     out["repo-hygiene"] = hygiene(files, summary)
@@ -821,4 +878,8 @@ def collect(root: Path, supplied: dict | None = None, starter: Path | None = Non
             out[name] = structured(name, supplied[name], rows[0][0] if rows else None)
         except (ValueError, TypeError, OverflowError):
             out[name] = blocked(f"input:{name}", "Supplied observations do not match the bounded structured evidence contract.")
+    from course_evidence import collect_course
+    out.update(collect_course(root, files, rows, partial))
+    if context is not None:
+        context.update(rows=rows, state=state, scope=scope, files=files)
     return out
