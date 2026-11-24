@@ -63,12 +63,15 @@ To audit a folder, run `./frictional audit FOLDER --out REPORT_FOLDER`. Friction
    - Frictional copies the folder into a fresh Linux container (Docker or Podman).
    - It runs the project's own install, run and test commands there. If the run spec serves a web app, it also checks that the app answers.
    - With `--run-history N`, it also reruns the tests at each of the last N commits, oldest first. This shows when tests started passing or failing.
-   - The point is the clean-machine test: "it works on my machine" is not the test; a clean Linux machine following the README is. A failure is reported as "did not install or run from its instructions on a clean Linux machine", with the failing command and the line of the log that names the cause. It is not a judgment of the code or the person.
+   - The point is the clean-machine test: "it works on my machine" is not the test; a clean Linux machine following the README is. A failure is reported as "did not install or run from its instructions on a clean Linux machine", with the failing command and the line of the log that names the cause. That line is the last error line in the log; for a Python traceback it is the exception line that ends the traceback, and for a pytest collection error it is pytest's `E` line rather than the bare summary. It is not a judgment of the code or the person.
    - Without a run spec, Frictional guesses the install and test commands, and says so. If a guess fails, the report says that the guess failed and that the README's own commands were not tested. It never blames the student for Frictional's own guess.
+   - If the hand-in has no code at all (only documents, media or a link), there is nothing to run. The report says so and gives no step about run commands.
 7. **Writes next steps,** most urgent first:
    - **P0:** the project's own instructions do not install or run it;
    - **P1:** core evidence is missing or a check failed, such as no README, no `FRICTIONAL.md`, failing tests, or an app that doesn't answer;
-   - **P2:** clarity and traceability, such as README sections without setup commands, no tests, no licence, or no Git history.
+   - **P2:** clarity and traceability, such as README sections without setup commands, no tests, no licence, no Git history, or a `.git` folder whose history cannot be read.
+
+   An install section counts only when a command sits under its heading (a code block, a `$` prompt, or an inline command such as `` `pip install ...` ``). A "Getting started" heading with prose only gets the step to add install commands.
 
    Each step names the change and the check that shows it worked.
 8. **Writes the report.**

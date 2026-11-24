@@ -197,6 +197,7 @@ def glp_table(dims: list[dict]) -> list[dict]:
 CODE_SUFFIXES = (".py", ".ipynb", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".java", ".go", ".rs", ".rb",
                  ".c", ".cc", ".cpp", ".h", ".cs", ".kt", ".swift", ".r", ".jl", ".gd", ".php", ".scala")
 ERROR_LINE = re.compile(r"(Error|Exception|error:|ERROR|No such file|not found|does not exist|[Ff]ailed|FAILED|Traceback)")
+BARE_ERROR = re.compile(r"Traceback \(most recent call last\):|(?:ERROR|FAILED) \S+")
 
 
 def last_error(out: Path | None, log: str | None) -> str | None:
@@ -207,10 +208,28 @@ def last_error(out: Path | None, log: str | None) -> str | None:
         text = (out / log).read_text(encoding="utf-8", errors="replace")
     except OSError:
         return None
-    lines = [x.strip() for x in text.splitlines() if x.strip() and not x.startswith(("#", "$ "))]
-    pick = next((x for x in reversed(lines) if ERROR_LINE.search(x)), lines[-1] if lines else None)
-    if not pick:
+    raw = [x.rstrip() for x in text.splitlines() if x.strip() and not x.startswith(("#", "$ "))]
+    if not raw:
         return None
+    # Candidate lines, by position in the log:
+    #  - lines matching ERROR_LINE, except a bare "Traceback ..." header or a bare pytest summary line
+    #    ("ERROR tests/x.py"), which name no cause;
+    #  - the line that closes each Python traceback (the first unindented line after the header), which
+    #    names the exception even when its class is not called ...Error;
+    #  - pytest's "E   ..." detail lines.
+    cands = [i for i, x in enumerate(raw) if ERROR_LINE.search(x) and not BARE_ERROR.fullmatch(x.strip())]
+    for i, x in enumerate(raw):
+        if x.strip() == "Traceback (most recent call last):":
+            end = next((j for j in range(i + 1, len(raw)) if not raw[j][:1].isspace()), None)
+            if end is not None:
+                cands.append(end)
+        elif re.match(r"^E\s{2,}\S", x):
+            cands.append(i)
+    if cands:
+        pick = raw[max(cands)].strip()
+    else:
+        pick = next((x.strip() for x in reversed(raw) if ERROR_LINE.search(x)), raw[-1].strip())
+    pick = re.sub(r"^E\s{2,}", "", pick)
     from container_run import mask_secrets
     pick = " ".join(mask_secrets(pick).split())
     return pick if len(pick) <= 180 else pick[:177] + "..."
@@ -238,8 +257,12 @@ def rule_steps(dims: list[dict], receipt: dict | None, out: Path | None = None,
                                 f"how to run it, and how to run its tests.{where}",
                       "check": "Rerun the audit: readme-completeness shows Reported, with install and usage cues."})
     elif status.get("readme-completeness") == "reported":
-        cues = re.search(r"Recognized Markdown heading cues: ([^.]*)\.", _observations(dims, "readme-completeness"))
+        observed = _observations(dims, "readme-completeness")
+        cues = re.search(r"Recognized Markdown heading cues: ([^.]*)\.", observed)
         found = {c.strip() for c in cues.group(1).split(",")} if cues else set()
+        with_cmds = re.search(r"Cue headings with a command under them: ([^.]*)\.", observed)
+        if with_cmds and "install" in found and "install" not in {c.strip() for c in with_cmds.group(1).split(",")}:
+            found.discard("install")  # an install heading with no command under it does not say how to install
         missing = [c for c in ("install", "usage") if c not in found]
         if missing:
             steps.append({"priority": "P2", "dimension": "readme-completeness", "locator": "README.md",
@@ -264,6 +287,12 @@ def rule_steps(dims: list[dict], receipt: dict | None, out: Path | None = None,
     if status.get("commit-history") == "no_evidence":
         steps.append({"priority": "P2", "dimension": "commit-history", "locator": "git",
                       "change": "Commit your work to Git as you go, so the history shows how the project developed.",
+                      "check": "Rerun the audit: commit-history shows Reported."})
+    elif status.get("commit-history") == "blocked":
+        steps.append({"priority": "P2", "dimension": "commit-history", "locator": ".git",
+                      "change": "The hand-in has a .git folder, but Frictional could not read the history from it (it may be "
+                                "incomplete, for example missing its objects). Hand in the whole project folder with all of "
+                                ".git, and check that `git log` lists your commits before you do.",
                       "check": "Rerun the audit: commit-history shows Reported."})
     # The container run.
     if run_stopped == "no_spec":
@@ -447,6 +476,9 @@ def container_step(root: Path, run: dict, out: Path | None, context: dict, revis
             return stop(f"The project's frictional-run.json is not a valid run spec ({exc}); nothing was run.")
     if spec is None:
         spec, spec_source = cr.default_spec(root, context.get("files", {})), "default from project manifests"
+    if spec is None and not any(n.lower().endswith(CODE_SUFFIXES) for n in context.get("files", {})):
+        return stop("--run was requested, but the hand-in has no code files (only documents, media or links), "
+                    "so there was nothing to run.", kind="no_code")
     if spec is None:
         subs = cr.subfolder_manifests(context.get("files", {}))
         where = (f" Manifests were found only in subfolders ({', '.join(x + '/' for x in subs)}), so Frictional "

@@ -75,6 +75,12 @@ CREDENTIAL = re.compile(
     r"(^|[._-])(?:env|credentials?|secrets?|tokens?|keyring|private[-_]?key|"
     r"id[-_](?:rsa|dsa|ecdsa|ed25519)|pem|pfx|p12|key)(?:[._-]|$)", re.I)
 UTC = dt.timezone.utc
+# A command in README prose: a fenced block (handled by the caller), an indented code line, a "$ " prompt, or an
+# inline code span that starts with a common command. Used only to say whether a section gives commands.
+COMMAND_LINE = re.compile(
+    r"^\s*\$ \S|^ {4,}(?![-*+] |\d+[.)] )\S|`(?:sudo )?(?:pip3?|python3?|py|npm|npx|yarn|pnpm|node|conda|mamba|poetry|uv|pipenv|"
+    r"apt(?:-get)?|brew|docker|make|cargo|go|gem|bundle|git|cd|cp|mvn|gradle|dotnet|streamlit|flask|uvicorn|jupyter|"
+    r"bash|sh|\./)\b[^`]*`")
 
 
 def fact(observation, locator, *alternatives):
@@ -564,21 +570,31 @@ def readme(root, files, partial):
         data = read_bounded(root, sorted(candidates, key=str.casefold)[0]).decode("utf-8", "strict")
     except (OSError, ValueError):
         return blocked("worktree:README", "README candidate could not be inspected within the bounded text rules.")
-    heads = []
+    heads = []          # [heading text, level, has a command under it]
+    open_heads = []     # headings whose section is still open (deeper headings stay inside it)
     fenced = False
     for line in data.splitlines():
-        if re.match(r"^\s*(?:```|~~~)", line):
-            fenced = not fenced
-        match = re.match(r"^\s{0,3}#{1,6}\s+(.{1,120})$", line)
+        fence = re.match(r"^\s*(?:```|~~~)", line)
+        match = re.match(r"^\s{0,3}(#{1,6})\s+(.{1,120})$", line)
         if match and not fenced:
-            heads.append(match[1].casefold())
+            level = len(match[1])
+            open_heads = [h for h in open_heads if h[1] < level]
+            heads.append([match[2].casefold(), level, False])
+            open_heads.append(heads[-1])
+        elif fence or fenced or COMMAND_LINE.search(line):
+            for h in open_heads:
+                h[2] = True
+        if fence:
+            fenced = not fenced
     titles = {"purpose": r"\b(purpose|overview|about|introduction)\b", "install": r"\b(install\w*|setup|requirements|getting started)\b",
               "usage": r"\b(usage|how to use|running|run|quick start)\b", "example": r"\b(example[s]?|demo)\b",
               "test": r"\b(test\w*|verification)\b", "license": r"\blicen[cs]e\b",
               "AI-use": r"\b(ai use|ai usage|generative ai|ai disclosure)\b"}
-    found = [k for k,p in titles.items() if any(re.search(p, h) for h in heads)]
+    found = [k for k,p in titles.items() if any(re.search(p, h[0]) for h in heads)]
+    commanded = [k for k in found if any(re.search(titles[k], h[0]) and h[2] for h in heads)]
     return reported(fact(f"Recognized Markdown heading cues: {', '.join(found) or 'none'}. "
-                         f"Not recognized by this heuristic: {', '.join(k for k in titles if k not in found) or 'none'}.",
+                         f"Not recognized by this heuristic: {', '.join(k for k in titles if k not in found) or 'none'}. "
+                         f"Cue headings with a command under them: {', '.join(commanded) or 'none'}.",
                          "worktree:README", "Other heading styles or information outside recognized headings can be missed.",
                          "A heading cue does not establish usable instructions or completeness."))
 
