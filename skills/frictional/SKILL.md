@@ -68,6 +68,10 @@ Every report carries a table of the preprint's seven friction components and whi
 
 For Y5, a trusted agent may code FRICTIONAL.md entries for the preprint's four texture markers (personal encounter, below-surface engagement, productive uncertainty, change over time) as **model interpretations**: cite the entry's line, give the marker, list alternatives (a fluent entry can be written after the fact; a terse one can reflect real work), and never quote more than a few words. Also check the cross-stream question: does the log's account of where the student got stuck match the commit history and test history?
 
+## In-class probes (course data for Y1, Y3, Y4, Y6, Y7)
+
+`./frictional probe make TARGET --starter STARTER --out OUT --run` writes a probe to `OUT/probes/` from Python functions that differ from the starter: predict-the-output items (signature and docstring only), one injected-bug item with a hint ladder, and frames for a near and a far transfer task. Keys come only from the container run. Say "functions that differ from the starter", never "functions the student wrote". You may draft transfer-task wording for the instructor; label it `agent-draft:` with your model name, and it needs the instructor's approval before `probe freeze`. If the code is student work, draft only with the institution-provided tool. Never give a probe only to some students or because of an audit finding, never treat a wrong prediction as evidence about authorship or AI use, and never use probe data for research before IRB approval and consent. `probe receipts` converts the instructor's receipts into an `--evidence` file.
+
 ## Report for the student, notes for the instructor
 
 `--mode student` (default) writes `report.md`/`report.json` with prioritized next steps. `--mode instructor` writes the same report, which stays shareable with the student, plus `instructor-notes.md` (line-level pointers for the rubric rows, commit days with no log entry, questions to ask). Instructor notes never go into the report or a film.

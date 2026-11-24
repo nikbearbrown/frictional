@@ -188,6 +188,10 @@ Use this catalog for an authorized static audit. The IDs are stable, not a ranki
 - **Confound:** Similarity to a starter may be expected; absent scaffolding records do not prove solo or unaided work. Do not infer tool use from code style.
 - **Example:** A starter supplied chart axes and labels; the changed data transform is a separate observation, not a claim about how it was produced.
 
+## Probe receipts
+
+An in-class probe (`frictional probe`) can supply rows for `calibration` (confidence before each item against unaided correctness), `transfer` (one near and one far task), `retrieval` (predict items at the first probe and a re-probe, delay counted from the deadline), `scaffolding` (the bug item's hint ladder, `"design": "ladder"`) and `temporal-engagement` (timed items, `"grain": "item"`). The confounds above still apply, plus: one probe is 6 to 8 items; items show only signatures, so a miss can reflect time since writing; the ladder makes hint-level success conditional; timeboxes cut off long times; a re-probe mixes forgetting with the testing effect and differences between forms.
+
 ## Course process files
 
 ### log-rubric-rows

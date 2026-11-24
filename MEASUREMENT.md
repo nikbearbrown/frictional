@@ -46,3 +46,7 @@ The synthetic regression tests hold the artifact fixed while varying the record:
 ## The seven GLP components
 
 Every report includes a table mapping the preprint's components (Y1 to Y7) to the dimensions that can carry evidence for each, and marks four of them (Y1, Y3, Y6, Y7) as needing course data that a repository cannot hold. Where course data is supplied, the packets compute the preprint's own descriptive quantities: Y1's difficulty–time correlation, Y3's near–far gap and 0.4/0.6 weighting, Y4's Brier score and direction, Y7's (hint − none) / (worked − none) ratio. None is combined into a GLP score, and none is a validated measure: the preprint's validation study has not been done.
+
+### Probe receipts
+
+`frictional probe receipts` turns in-class probe receipts into the `calibration`, `transfer`, `retrieval`, `scaffolding` and `temporal-engagement` packets. One probe gives each student 6 to 8 items: too few for a per-student calibration (the study's minimum is 30 rated items), transfer gap (one near and one far item) or Y7 (one bug item). Retrieval rows describe success by delay since the deadline; they are not a spacing effect, and an individual Y6 needs a counterbalanced design the probe does not have. Hint-ladder data use `"design": "ladder"`, which reports success at each rung among those who reached it and never the preprint's ratio. Timed probe items use `"grain": "item"`; their times are cut off by the timeboxes.

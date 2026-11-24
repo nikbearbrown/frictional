@@ -14,12 +14,16 @@ Supported packet (individual fields are strict; unknown/malformed keys fail clos
   "category": "assertion"|"build"|"config"|"dependency"|"environment"|"syntax"|"other"}]}
   "category" is required for failures and omitted for passes.
 * temporal-engagement: {"milestones": [{"start": ISO_TIME, "end": ISO_TIME,
-  "difficulty": "low"|"medium"|"high"}]} (nonoverlapping, counts only)
+  "difficulty": "low"|"medium"|"high"}], optional "grain": "item"} (nonoverlapping,
+  counts only; "item" marks timed probe items rather than assignment milestones)
 * transfer, calibration, retrieval, scaffolding: {"observations": [...]}
   transfer rows: {"distance": "near"|"far", "correct": BOOL}
   calibration rows: {"confidence": 0..1, "correct": BOOL}
   retrieval rows: {"delay_hours": 0..87600, "correct": BOOL}
-  scaffolding rows: {"level": "none"|"hint"|"worked", "successful": BOOL}
+  scaffolding rows: {"level": "none"|"hint"|"worked", "successful": BOOL}; the
+  scaffolding packet may add "design": "ladder" when each student moved up a hint
+  ladder (none, then partial, then full), which reports conditional success per
+  rung and never the preprint's ratio
 
 ISO_TIME needs an explicit timezone. Lists are capped at 500 and each adapter
 uses fixed output phrases, not supplied raw text, identities, URLs or paths.
@@ -726,6 +730,7 @@ def structured(dimension, value, head=None):
                              "The number or sequence of failures does not establish learning or effort."))
 
     if dimension == "temporal-engagement":
+        value, grain = _option(value, dimension, "grain")
         grouped = collections.defaultdict(list)
         periods = []
         for r in items(value, "milestones"):
@@ -747,12 +752,18 @@ def structured(dimension, value, head=None):
         r = pearson(pairs)
         if r is not None:
             text += (f"; correlation between difficulty (low 1, medium 2, high 3) and interval hours across "
-                     f"{len(pairs)} intervals: r = {r:+.2f} (the preprint's Y1 uses item-level time on task; "
-                     f"milestone intervals are a coarser stand-in)")
-        return reported(fact(f"Supplied milestone intervals by difficulty: {text}.", locator,
+                     f"{len(pairs)} intervals: r = {r:+.2f} "
+                     + ("(item-level times, as in the preprint's Y1; probe items are timeboxed, so the longest "
+                        "times are cut off)" if grain == "item" else
+                        "(the preprint's Y1 uses item-level time on task; milestone intervals are a coarser stand-in)"))
+        label = "timed item intervals" if grain == "item" else "milestone intervals"
+        return reported(fact(f"Supplied {label} by difficulty: {text}.", locator,
                              "Ranges include gaps, may omit offline work and are not active engagement or time-on-task.",
                              "Difficulty labels are supplied, not established by the repository."))
 
+    design = None
+    if dimension == "scaffolding":
+        value, design = _option(value, dimension, "design")
     observations = items(value, "observations")
     grouped = collections.defaultdict(lambda: [0, 0])
     brier = 0.0
@@ -794,6 +805,13 @@ def structured(dimension, value, head=None):
     elif dimension == "transfer" and {"near", "far"} <= rate.keys():
         summary += (f"; near minus far {rate['near'] - rate['far']:+.3f}; "
                     f"0.4 x near + 0.6 x far = {0.4 * rate['near'] + 0.6 * rate['far']:.3f} (the preprint's Y3 weighting)")
+    elif dimension == "scaffolding" and design == "ladder":
+        summary = "; ".join(f"{g}: {grouped[g][0]}/{grouped[g][1]} marked successful among those who reached it"
+                            for g in ("none", "hint", "worked") if g in grouped)
+        return reported(fact(f"Descriptive hint-ladder observations only: {summary}.", locator,
+                             "On a ladder only those who failed with no hint reach the partial hint, so these are "
+                             "conditional rates; the preprint's (hint - none) / (worked - none) ratio is not computed.",
+                             "Item mix, timing and missing observations can change these counts; no learner diagnosis is made."))
     elif dimension == "scaffolding" and {"none", "hint", "worked"} <= rate.keys() and rate["worked"] != rate["none"]:
         summary += (f"; (hint - none) / (worked - none) = "
                     f"{(rate['hint'] - rate['none']) / (rate['worked'] - rate['none']):.3f} (the preprint's Y7 ratio)")
@@ -819,6 +837,16 @@ def pearson(pairs):
 
 STRUCTURED = frozenset({"push-timeline", "install-test", "error-trajectory", "temporal-engagement",
                         "transfer", "calibration", "retrieval", "scaffolding"})
+# Optional packet fields beyond the rows (probes.py checks this before writing them).
+PACKET_OPTIONS = {"scaffolding": {"design": ("ladder",)}, "temporal-engagement": {"grain": ("item",)}}
+
+
+def _option(value, dimension, name):
+    """Split an optional packet field off; returns (value without it, option or None)."""
+    if isinstance(value, dict) and name in value:
+        option = choice(value[name], set(PACKET_OPTIONS[dimension][name]))
+        return {k: v for k, v in value.items() if k != name}, option
+    return value, None
 
 
 def collect(root: Path, supplied: dict | None = None, starter: Path | None = None,

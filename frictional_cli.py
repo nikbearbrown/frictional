@@ -390,7 +390,14 @@ def container_step(root: Path, run: dict, out: Path | None, context: dict, revis
     return receipt, cr.run_results(receipt), summary
 
 
+PROBE_COMMAND = True
+
+
 def main(argv=None) -> int:
+    raw = sys.argv[1:] if argv is None else list(argv)
+    if raw and raw[0] == "probe":
+        from probes import main as probe_main
+        return probe_main(raw[1:])
     parser = argparse.ArgumentParser(prog="frictional", description=__doc__)
     parser.add_argument("--version", action="version", version=VERSION)
     subs = parser.add_subparsers(dest="action", required=True)
@@ -416,6 +423,9 @@ def main(argv=None) -> int:
     runp.add_argument("--spec", type=Path, help="run spec JSON; default: guessed from manifests")
     runp.add_argument("--serve", type=int, default=0, metavar="SECONDS",
                       help="start the spec's serve command and keep the app up this long (prints its local URL)")
+    subs.add_parser("probe", add_help=False,
+                    help="in-class probes from a project's own code: make, references, freeze, receipts "
+                         "(see MEASUREMENT.md, Probe receipts)")
     val = subs.add_parser("validate", help="validate a Frictional report JSON")
     val.add_argument("report", type=Path)
     ren = subs.add_parser("render", help="render a validated report to a new directory")

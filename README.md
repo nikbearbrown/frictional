@@ -115,11 +115,11 @@ Evidence for a component is not a measurement of it, and no score is computed.
 |---|---|---|
 | Y1 Temporal engagement pattern | Time on task by item difficulty, from the course, for example Canvas. Commit times are not time on task. | No: needs course data |
 | Y2 Error trajectory coherence | Tests rerun at each commit (`--run-history`), failed checks in `VERIFICATION.md`, and the friction-and-response rows of `FRICTIONAL.md`. Whether the errors follow the concept's structure needs a reader. | Yes |
-| Y3 Cross-context transfer | Near and far transfer tasks given by the course. | No: needs course data |
+| Y3 Cross-context transfer | Near and far transfer tasks given by the course, or an [in-class probe](#in-class-probes). | No: needs course data |
 | Y4 Uncertainty calibration | The student's own numeric predictions in `PREDICTIONS.md`, or supplied quiz confidence data. | Yes |
 | Y5 Social knowledge texture | `FRICTIONAL.md` and how its dates match the commits. These show where texture can appear; coding the texture itself is a reader's interpretation. | Partly |
 | Y6 Retrieval strength decay | Spaced retrieval quizzes from the course. | No: needs course data |
-| Y7 Scaffolding response curve | Hint-level experiments from the course. | No: needs course data |
+| Y7 Scaffolding response curve | Hint-level experiments from the course, or an [in-class probe](#in-class-probes). | No: needs course data |
 
 ## Start here
 
@@ -159,7 +159,7 @@ More ways to run it:
 - `--ref`: pins a GitHub checkout to a full commit SHA. GitHub retrieval is time-bounded. For a large repository, use a local checkout.
 - `--starter DIR`: compares the project with a course starter.
 - `--deadline`: takes an ISO timestamp with a time zone, for commit timing.
-- `--evidence FILE`: takes a bounded, normalized JSON file of course data, such as quiz confidence. It never takes raw LMS exports.
+- `--evidence FILE`: takes a bounded, normalized JSON file of course data, such as quiz confidence or probe receipts. It never takes raw LMS exports.
 - `--profile FILE`: hides checks that don't apply. The [general profile](profiles/general.json) hides nothing.
 
 ## Run the project in a container
@@ -187,6 +187,29 @@ Without a spec, Frictional guesses only install and test commands from `requirem
 ```
 
 The sample in [`examples/word-counter`](examples/word-counter) has a working `frictional-run.json`.
+
+## In-class probes
+
+The GLP components a repository cannot hold (Y1 timing, Y3 transfer, Y4 calibration, Y6 retrieval, Y7 scaffolding) can come from a short probe built from the project's own code. `probe make`:
+
+- picks 3 to 5 Python functions that differ from the course starter;
+- writes a predict-the-output item for each;
+- writes one injected-bug item with a hint ladder;
+- writes frames for a near and a far transfer task.
+
+It never changes the project, and every answer key comes from running the code in the container (`--run`).
+
+The instructor rates difficulty, writes the transfer tasks, freezes the probe and gives it in class without AI. They then record one receipt per student: item IDs, confidence, timing, hint level and correctness. A receipt never holds answers or names. `probe receipts` turns the receipts into an `--evidence` file.
+
+```sh
+./frictional probe make examples/word-counter --starter examples/word-counter-starter --out ~/probe-demo --run --deadline 2027-02-14T23:59:00-05:00
+./frictional probe references ~/probe-demo --target examples/word-counter
+./frictional probe freeze ~/probe-demo
+./frictional probe receipts --spec ~/probe-demo/probes/probe-spec.json receipt-A.json --out evidence.json
+./frictional audit examples/word-counter --out ~/probe-audit --evidence evidence.json
+```
+
+Probe files are education records: keep them private and never commit them. A probe is for every student in a section, announced in advance, for completion credit only; it is never an integrity check. See [Probe receipts](MEASUREMENT.md#probe-receipts) for what the numbers can and cannot say.
 
 ## Use it with a coding agent
 
