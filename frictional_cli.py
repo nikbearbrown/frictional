@@ -194,10 +194,69 @@ def glp_table(dims: list[dict]) -> list[dict]:
     return rows
 
 
-def rule_steps(dims: list[dict], receipt: dict | None) -> list[dict]:
+CODE_SUFFIXES = (".py", ".ipynb", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".java", ".go", ".rs", ".rb",
+                 ".c", ".cc", ".cpp", ".h", ".cs", ".kt", ".swift", ".r", ".jl", ".gd", ".php", ".scala")
+ERROR_LINE = re.compile(r"(Error|Exception|error:|ERROR|No such file|not found|does not exist|[Ff]ailed|FAILED|Traceback)")
+
+
+def last_error(out: Path | None, log: str | None) -> str | None:
+    """The last line of a run log that names the failure, secrets masked, for a next step."""
+    if out is None or not log or not re.fullmatch(r"run/logs/[A-Za-z0-9_.-]{1,80}", log):
+        return None
+    try:
+        text = (out / log).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    lines = [x.strip() for x in text.splitlines() if x.strip() and not x.startswith(("#", "$ "))]
+    pick = next((x for x in reversed(lines) if ERROR_LINE.search(x)), lines[-1] if lines else None)
+    if not pick:
+        return None
+    from container_run import mask_secrets
+    pick = " ".join(mask_secrets(pick).split())
+    return pick if len(pick) <= 180 else pick[:177] + "..."
+
+
+def _observations(dims: list[dict], dim_id: str) -> str:
+    row = next((d for d in dims if d["id"] == dim_id), None)
+    return " ".join(f["observation"] for f in row["facts"]) if row else ""
+
+
+def rule_steps(dims: list[dict], receipt: dict | None, out: Path | None = None,
+               run_stopped: str | None = None, files: dict | None = None) -> list[dict]:
     """Next steps that follow from dimension states and the run receipt (fixed wording)."""
     status = {d["id"]: d["status"] for d in dims}
     steps = []
+    has_code = any(name.lower().endswith(CODE_SUFFIXES) for name in (files or {}))
+    # The artifact: can a reader set it up and check it?
+    if status.get("readme-completeness") == "no_evidence":
+        inner = sorted({n.split("/")[0] for n in (files or {}) if n.count("/") == 1
+                        and re.fullmatch(r"README(\.(md|txt|rst|markdown))?", n.split("/")[1], re.I)})
+        where = (f" The only README is inside {inner[0]}/: either hand in that folder itself, or add a short README at the "
+                 "top that points to it." if len(inner) == 1 else "")
+        steps.append({"priority": "P1", "dimension": "readme-completeness", "locator": "README.md",
+                      "change": "Add a README.md at the top of the project saying what it does, how to install it, "
+                                f"how to run it, and how to run its tests.{where}",
+                      "check": "Rerun the audit: readme-completeness shows Reported, with install and usage cues."})
+    elif status.get("readme-completeness") == "reported":
+        cues = re.search(r"Recognized Markdown heading cues: ([^.]*)\.", _observations(dims, "readme-completeness"))
+        found = {c.strip() for c in cues.group(1).split(",")} if cues else set()
+        missing = [c for c in ("install", "usage") if c not in found]
+        if missing:
+            steps.append({"priority": "P2", "dimension": "readme-completeness", "locator": "README.md",
+                          "change": f"Give the README {' and '.join('an Install section' if c == 'install' else 'a Usage (or Run) section' for c in missing)} "
+                                    "with the exact commands, so someone can set the project up on a clean machine.",
+                          "check": "Rerun the audit: readme-completeness lists install and usage cues."})
+    if has_code and re.search(r"Found 0 test-path candidates", _observations(dims, "verification")):
+        steps.append({"priority": "P2", "dimension": "verification", "locator": "tests/",
+                      "change": "Add at least one automated test of the project's main behaviour (for example tests/test_main.py, "
+                                "or a test script in package.json), and say in the README how to run it.",
+                      "check": "Rerun the audit: verification lists a test file; with --run, the test phase passes."})
+    if "No root LICENSE" in _observations(dims, "documentation-licensing"):
+        steps.append({"priority": "P2", "dimension": "documentation-licensing", "locator": "LICENSE",
+                      "change": "Add a LICENSE file at the top of the project, so others know how they may reuse it "
+                                "(ask your instructor which licence the course expects).",
+                      "check": "Rerun the audit: documentation-licensing finds a root LICENSE."})
+    # The process record.
     if status.get("process-log") == "no_evidence":
         steps.append({"priority": "P1", "dimension": "process-log", "locator": "FRICTIONAL.md",
                       "change": "Add FRICTIONAL.md at the top of the folder you hand in, using the course template, with short dated entries.",
@@ -206,30 +265,60 @@ def rule_steps(dims: list[dict], receipt: dict | None) -> list[dict]:
         steps.append({"priority": "P2", "dimension": "commit-history", "locator": "git",
                       "change": "Commit your work to Git as you go, so the history shows how the project developed.",
                       "check": "Rerun the audit: commit-history shows Reported."})
+    # The container run.
+    if run_stopped == "no_spec":
+        steps.append({"priority": "P1", "dimension": "install-test", "locator": "frictional-run.json",
+                      "change": "Frictional found no install instructions it could follow on its own. Add frictional-run.json at "
+                                "the top of the project listing the install, run and test commands your README gives, each with "
+                                "its README line (the format is in Frictional's README).",
+                      "check": "Rerun with --run: the Container run section shows that setup passed."})
     if receipt:
         outcome = (receipt.get("overall") or receipt.get("phases") or {})
         failing = [c for c in receipt.get("commands", []) if c.get("exit_code") not in (0, None) or c.get("timed_out")]
+
         def first(phase):
             return next((c for c in failing if c.get("phase") == phase), None)
-        if outcome.get("setup") == "failed":
-            c = first("setup") or {}
-            steps.append({"priority": "P0", "dimension": "install-test", "locator": c.get("log", "run/receipt.json"),
-                          "change": f"The project did not install on a clean Linux machine. The setup command from {c.get('source', 'the run spec')} failed; "
-                                    "fix that instruction or list the missing prerequisite in the README.",
-                          "check": "Rerun with --run: install-test reports the setup phase passed."})
-        if outcome.get("run") == "failed":
-            c = first("run") or {}
-            steps.append({"priority": "P0", "dimension": "run-check", "locator": c.get("log", "run/receipt.json"),
-                          "change": f"The documented run command ({c.get('source', 'run spec')}) failed after a clean install. Make the documented command work as written.",
-                          "check": "Rerun with --run: run-check reports the run phase passed."})
-        if outcome.get("test") == "failed":
-            c = first("test") or {}
-            steps.append({"priority": "P1", "dimension": "run-check", "locator": c.get("log", "run/receipt.json"),
-                          "change": "Tests failed in a clean Linux container. Read the log, fix the failure or the test, and say in FRICTIONAL.md what you found.",
-                          "check": "Rerun with --run: the test phase passes."})
+
+        def detail(c):
+            line = last_error(out, c.get("log"))
+            return f" The log ends: \u201c{line}\u201d." if line else ""
+
+        for phase in ("setup", "run", "test"):
+            if outcome.get(phase) != "failed":
+                continue
+            c = first(phase) or {}
+            source, cmd = str(c.get("source", "the run spec")), c.get("cmd", "")
+            dim = "install-test" if phase == "setup" else "run-check"
+            if source.startswith("default:"):
+                # Frictional's own guess failed: the student's instructions were not tested.
+                steps.append({"priority": "P1", "dimension": dim, "locator": c.get("log", "run/receipt.json"),
+                              "change": f"Frictional guessed the {phase} command `{cmd}` from {source.removeprefix('default: ')}, "
+                                        f"and it failed.{detail(c)} That was Frictional's guess, not your instruction: your "
+                                        "README's own commands were not tested. Add frictional-run.json listing the commands "
+                                        "your README gives, then rerun with --run.",
+                              "check": f"Rerun with --run: the {phase} phase passes using your frictional-run.json."})
+            elif phase == "setup":
+                steps.append({"priority": "P0", "dimension": dim, "locator": c.get("log", "run/receipt.json"),
+                              "change": f"The project did not install on a clean Linux machine: the setup command from {source} "
+                                        f"(`{cmd}`) failed.{detail(c)} Fix that instruction, or list the missing prerequisite in the README.",
+                              "check": "Rerun with --run: install-test reports the setup phase passed."})
+            elif phase == "run":
+                steps.append({"priority": "P0", "dimension": dim, "locator": c.get("log", "run/receipt.json"),
+                              "change": f"The documented run command from {source} (`{cmd}`) failed after a clean install.{detail(c)} "
+                                        "Make the documented command work as written, or include what it needs.",
+                              "check": "Rerun with --run: run-check reports the run phase passed."})
+            else:
+                steps.append({"priority": "P1", "dimension": dim, "locator": c.get("log", "run/receipt.json"),
+                              "change": f"Tests failed in a clean Linux container (`{cmd}`).{detail(c)} Fix the failure or the test, "
+                                        "and say in FRICTIONAL.md what you found.",
+                              "check": "Rerun with --run: the test phase passes."})
         if outcome.get("serve") == "failed":
-            steps.append({"priority": "P1", "dimension": "serve-check", "locator": "run/receipt.json",
-                          "change": "The app did not answer on its documented port. Check the serve command, host (use 0.0.0.0 inside a container) and port.",
+            # The serve step is recorded in receipt["serve"], not among the commands.
+            c = receipt.get("serve") if isinstance(receipt.get("serve"), dict) else (first("serve") or {})
+            exited = " The app exited instead of staying up." if c.get("state") == "exited" else ""
+            steps.append({"priority": "P1", "dimension": "serve-check", "locator": c.get("log", "run/receipt.json"),
+                          "change": f"The app did not answer on its documented port.{exited}{detail(c)} Check the serve command, the "
+                                    "files it needs, the host (use 0.0.0.0 inside a container) and the port.",
                           "check": "Rerun with --run: serve-check reports that the app answered."})
     return steps
 
@@ -298,7 +387,9 @@ def audit_folder(root: Path, target: dict, supplied: dict, starter: Path | None,
 
     base_target = baseline["target"]
     hidden_steps = {d["id"] for d in dims if d["status"] == "hidden_by_instructor"}
-    steps = [x for x in steps + rule_steps(dims, receipt) if x["dimension"] not in hidden_steps]
+    stopped = run.pop("_stopped", None) if run is not None else None
+    steps = [x for x in steps + rule_steps(dims, receipt, out=out, run_stopped=stopped, files=context.get("files"))
+             if x["dimension"] not in hidden_steps]
     steps.sort(key=lambda x: (PRIORITY[x["priority"]], x["dimension"]))
     report = {
         "schema_version": 2,
@@ -339,7 +430,8 @@ def container_step(root: Path, run: dict, out: Path | None, context: dict, revis
     import container_run as cr
     from process_evidence import blocked
 
-    def stop(message):
+    def stop(message, kind="machine"):
+        run["_stopped"] = kind
         return None, {d: blocked("run", message) for d in RUN_DIMS}, None
 
     if out is None:
@@ -356,7 +448,12 @@ def container_step(root: Path, run: dict, out: Path | None, context: dict, revis
     if spec is None:
         spec, spec_source = cr.default_spec(root, context.get("files", {})), "default from project manifests"
     if spec is None:
-        return stop("No run spec was given and no frictional-run.json, requirements.txt, pyproject.toml or package.json was found at the top of the folder; nothing was run.")
+        subs = cr.subfolder_manifests(context.get("files", {}))
+        where = (f" Manifests were found only in subfolders ({', '.join(x + '/' for x in subs)}), so Frictional "
+                 "could not tell which to install." if subs else "")
+        return stop("--run was requested, but there is no frictional-run.json, and no requirements.txt, "
+                    "pyproject.toml or package.json at the top of the folder or in a single subfolder, "
+                    f"so nothing was run.{where}", kind="no_spec")
     history = []
     want = run.get("history", 0)
     rows = context.get("rows") or []
@@ -562,5 +659,13 @@ def run_only(args) -> int:
     return 0
 
 
+def _stop_on_term(signum, frame):
+    # A plain kill (SIGTERM) would otherwise end Python without running the container
+    # clean-up in run_project's finally block, leaving the container running.
+    raise SystemExit(128 + signum)
+
+
 if __name__ == "__main__":
+    import signal
+    signal.signal(signal.SIGTERM, _stop_on_term)
     raise SystemExit(main())

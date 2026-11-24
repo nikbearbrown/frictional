@@ -63,11 +63,12 @@ To audit a folder, run `./frictional audit FOLDER --out REPORT_FOLDER`. Friction
    - Frictional copies the folder into a fresh Linux container (Docker or Podman).
    - It runs the project's own install, run and test commands there. If the run spec serves a web app, it also checks that the app answers.
    - With `--run-history N`, it also reruns the tests at each of the last N commits, oldest first. This shows when tests started passing or failing.
-   - The point is the clean-machine test: "it works on my machine" is not the test; a clean Linux machine following the README is. A failure is reported as "did not install or run from its instructions on a clean Linux machine", with the failing command and its log. It is not a judgment of the code or the person.
+   - The point is the clean-machine test: "it works on my machine" is not the test; a clean Linux machine following the README is. A failure is reported as "did not install or run from its instructions on a clean Linux machine", with the failing command and the line of the log that names the cause. It is not a judgment of the code or the person.
+   - Without a run spec, Frictional guesses the install and test commands, and says so. If a guess fails, the report says that the guess failed and that the README's own commands were not tested. It never blames the student for Frictional's own guess.
 7. **Writes next steps,** most urgent first:
-   - **P0:** it does not install or run;
-   - **P1:** core evidence is missing or a check failed;
-   - **P2:** clarity and traceability.
+   - **P0:** the project's own instructions do not install or run it;
+   - **P1:** core evidence is missing or a check failed, such as no README, no `FRICTIONAL.md`, failing tests, or an app that doesn't answer;
+   - **P2:** clarity and traceability, such as README sections without setup commands, no tests, no licence, or no Git history.
 
    Each step names the change and the check that shows it worked.
 8. **Writes the report.**
@@ -174,7 +175,7 @@ What happens:
 - Frictional removes the container afterwards.
 - It keeps `run/receipt.json`, with each command, its exit code and time, and the outcome of each phase. It also keeps `run/transcript.jsonl` and per-command logs in `run/logs/`, the full output with likely secrets masked.
 
-Without a spec, Frictional guesses only install and test commands from `requirements.txt`, `pyproject.toml` or `package.json`, and labels them as guesses. To test the commands your README actually gives, write a spec. Each command carries the README line it came from. Save the spec as `frictional-run.json` at the top of the project and `--run` uses it automatically, or pass any file with `--run-spec`:
+Without a spec, Frictional guesses only install and test commands from `requirements.txt`, `pyproject.toml` or `package.json`, and labels them as guesses. It looks at the top of the folder. If the top holds no code and exactly one subfolder holds a manifest, it looks in that subfolder instead. To test the commands your README actually gives, write a spec. Each command carries the README line it came from. Save the spec as `frictional-run.json` at the top of the project and `--run` uses it automatically, or pass any file with `--run-spec`:
 
 ```json
 {

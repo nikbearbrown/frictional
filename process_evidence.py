@@ -70,7 +70,7 @@ MAX_PACK_FILES = 8
 HEX = re.compile(rb"[0-9a-f]{40}|[0-9a-f]{64}")
 STAMP = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})")
 SKIP = {".git", ".venv", "venv", "node_modules", "__pycache__", ".pytest_cache",
-        ".mypy_cache", ".tox", ".cache", "dist", "build", "coverage", ".next", "target"}
+        ".mypy_cache", ".tox", ".cache", "dist", "build", "coverage", ".next", "target", "site-packages"}
 CREDENTIAL = re.compile(
     r"(^|[._-])(?:env|credentials?|secrets?|tokens?|keyring|private[-_]?key|"
     r"id[-_](?:rsa|dsa|ecdsa|ed25519)|pem|pfx|p12|key)(?:[._-]|$)", re.I)
@@ -179,7 +179,12 @@ def inventory(root):
                     elif CREDENTIAL.search(name):
                         credential_count += 1
                     elif stat.S_ISDIR(st.st_mode):
-                        if name.startswith(".") or len(path) >= 12:
+                        if name.startswith("."):
+                            # Hidden folders (.github, .vscode, .streamlit) are skipped by policy.
+                            # They cannot hide a top-level README or FRICTIONAL.md, so they do not
+                            # make the inventory partial.
+                            continue
+                        if len(path) >= 12:
                             omitted += 1
                         else:
                             todo.append(path)
@@ -871,6 +876,17 @@ def collect(root: Path, supplied: dict | None = None, starter: Path | None = Non
         return out
     files, summary = inventory(root)
     rows, state = history(root)
+    if state in ("partial", "unavailable") and len(rows) < MAX_COMMITS:
+        # The built-in reader handles loose objects and simple packs. Ordinary clones and
+        # forks often need more (large or delta-heavy packs); read them with git itself,
+        # using the same locked-down calls as for a folder inside a course repository.
+        from gitcli import folder_history
+        try:
+            more, more_state = folder_history(root, "")
+        except Exception:  # noqa: BLE001 - any failure keeps the built-in result
+            more, more_state = [], "unavailable"
+        if more_state in ("complete", "partial") and len(more) > len(rows):
+            rows, state = more, more_state
     scope = None
     if state == "absent":
         # A student folder inside a course repository has no .git of its own:

@@ -148,6 +148,18 @@ class DefaultSpecTests(unittest.TestCase):
         files = self.make({"main.py": "print(1)", "src/requirements.txt": "x", "test_main.py": "x"})
         self.assertIsNone(cr.default_spec(self.root, files))
 
+    def test_project_in_one_subfolder(self):
+        files = self.make({"README.md": "x", "app/requirements.txt": "pytest\n", "app/tests/test_a.py": "x"})
+        spec = cr.default_spec(self.root, files)
+        self.assertEqual(spec["setup"][0]["cmd"], "cd app && python -m pip install --no-cache-dir -r requirements.txt")
+        self.assertEqual(spec["setup"][0]["source"], "default: app/requirements.txt")
+        self.assertEqual(spec["test"][0]["cmd"], "cd app && python -m pytest -q")
+
+    def test_two_subfolders_are_not_guessed(self):
+        files = self.make({"README.md": "x", "backend/package.json": "{}", "frontend/package.json": "{}"})
+        self.assertIsNone(cr.default_spec(self.root, files))
+        self.assertEqual(cr.subfolder_manifests(files), ["backend", "frontend"])
+
 
 class MaskAndCategoryTests(unittest.TestCase):
     def test_masking(self):

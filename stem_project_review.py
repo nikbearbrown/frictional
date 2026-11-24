@@ -24,7 +24,8 @@ VERSION = "0.1.0"
 REMOTE = re.compile(r"https://github\.com/([A-Za-z0-9][A-Za-z0-9-]*)/([A-Za-z0-9_][A-Za-z0-9_.-]*)/?")
 SHA = re.compile(r"[0-9a-fA-F]{40}")
 SKIP = {".git", ".hg", ".svn", "node_modules", "vendor", ".venv", "venv", "__pycache__",
-        ".tox", ".next", ".godot", "Library", "pantry", "dist", "build", "coverage", ".cache"}
+        ".tox", ".next", ".godot", "Library", "pantry", "dist", "build", "coverage", ".cache",
+        "site-packages"}
 MAX_FILES = 30000
 MAX_ENTRIES = 100000
 MAX_READ = 256 * 1024

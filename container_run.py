@@ -380,14 +380,45 @@ def _npm_test(root):
     return isinstance(test, str) and bool(test.strip()) and "no test specified" not in test
 
 
-def default_spec(root: Path, files: dict[str, int]) -> dict | None:
-    """Conservative spec from root-level manifests; never guesses run or serve commands.
+MANIFESTS = ("requirements.txt", "pyproject.toml", "package.json")
 
-    Python manifests win when a root also has package.json. Every command's
+
+def subfolder_manifests(files: dict[str, int]) -> list[str]:
+    """Immediate subfolders that hold a manifest, when the top of the folder holds none."""
+    if any(name in files for name in MANIFESTS):
+        return []
+    return sorted({name.split("/")[0] for name in files
+                   if name.count("/") == 1 and name.split("/")[1] in MANIFESTS})
+
+
+def default_spec(root: Path, files: dict[str, int], _sub: str | None = None) -> dict | None:
+    """Conservative spec from manifests; never guesses run or serve commands.
+
+    Looks at the top of the folder, or, when the top has no manifest and exactly one
+    immediate subfolder does, at that subfolder (commands then start with `cd SUB &&`).
+    Python manifests win when a folder also has package.json. Every command's
     source starts with "default:" so a report can say the tool guessed it.
     """
     root = Path(root)
     top = {name for name in files if "/" not in name}
+    if _sub is None and not any(name in top for name in MANIFESTS):
+        # Only when the top of the folder holds no code of its own: then the project
+        # plainly lives in that one subfolder.
+        if any(PurePosixPath(name).suffix in (".py", ".js", ".mjs", ".ts", ".ipynb") for name in top):
+            return None
+        subs = subfolder_manifests(files)
+        if len(subs) != 1 or not re.fullmatch(r"[A-Za-z0-9._-]{1,100}", subs[0]) or subs[0].startswith("."):
+            return None
+        sub = subs[0]
+        inner = default_spec(root / sub, {name[len(sub) + 1:]: size for name, size in files.items()
+                                          if name.startswith(sub + "/")}, _sub=sub)
+        if inner is None:
+            return None
+        for phase in ("setup", "test"):
+            for step in inner.get(phase, []):
+                step["cmd"] = f"cd {sub} && {step['cmd']}"
+                step["source"] = step["source"].replace("default: ", f"default: {sub}/", 1)
+        return check_spec(inner)
     if "requirements.txt" in top or "pyproject.toml" in top:
         if "requirements.txt" in top:
             setup = {"cmd": "python -m pip install --no-cache-dir -r requirements.txt",

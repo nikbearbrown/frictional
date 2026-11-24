@@ -204,7 +204,9 @@ def _render_v2(report):
     run = report["run"]
     lines.extend(["", "## Container run", ""])
     if run is None:
-        lines.append("Not run. Add --run to install and run the project in a fresh Linux container.")
+        why = next((x.partition(": ")[2] for x in report.get("limitations") or [] if x.startswith("install-test: ")), None)
+        lines.append(f"Not run: {_md(why)}" if why else
+                     "Not run. Add --run to install and run the project in a fresh Linux container.")
     else:
         outcomes = ", ".join(f"{_md(k)}: {_md(v)}" for k, v in sorted(run["outcomes"].items()))
         lines.append(f"Ran in {_md(run['runtime'])} with image {_md(run['image'])} ({_md(run['spec_source'])}). "
@@ -240,7 +242,15 @@ def _render(report):
     if report.get("schema_version") == 2:
         lines.extend(_render_v2(report))
     lines.extend(["", "## Dimension status", ""])
-    lines.extend(f"- {_md(d['id'])} ({d['family']}): {STATUSES[d['status']]}" for d in dimensions)
+    # A blocked dimension's reason is recorded in limitations as "<id>: <reason>"; show it beside the status.
+    reasons = {}
+    for item in report.get("limitations") or []:
+        head, sep, rest = item.partition(": ")
+        if sep and head not in reasons:
+            reasons[head] = rest
+    lines.extend(f"- {_md(d['id'])} ({d['family']}): {STATUSES[d['status']]}"
+                 + (f" ({_md(reasons[d['id']])})" if d["status"] == "blocked" and d["id"] in reasons else "")
+                 for d in dimensions)
     if not dimensions:
         lines.append("No dimensions recorded.")
     lines.extend(["", "## Observed facts", ""])
@@ -314,10 +324,18 @@ def write_instructor_notes(report, notes, out: Path):
     gaps = [r for r in report.get("glp", []) if r["status"] != "evidence_recorded"]
     lines.extend(f"- {_md(r['id'])} {_md(r['name'])}: {GLP_STATES[r['status']]}. {_md(r['note'])}" for r in gaps) \
         if gaps else lines.append("Every component has some recorded evidence.")
-    lines.extend(["", "## Questions to ask", "",
-                  "- Walk me through one entry in FRICTIONAL.md where something went wrong: what did you try next, and why?",
-                  "- Pick one prediction you made: what did you expect, what happened, and what does the difference tell you?",
-                  "- Which part of this code could you change without help right now? Show me."])
+    status = {d["id"]: d["status"] for d in report.get("dimensions", [])}
+    questions = []
+    if status.get("process-log") == "reported":
+        questions.append("- Walk me through one entry in FRICTIONAL.md where something went wrong: what did you try next, and why?")
+    else:
+        questions.append("- Tell me about one point where this project went wrong: what did you try next, and why?")
+    if status.get("prediction-log") == "reported":
+        questions.append("- Pick one prediction you made: what did you expect, what happened, and what does the difference tell you?")
+    else:
+        questions.append("- Before you ran it the first time, what did you expect to happen? What actually happened?")
+    questions.append("- Which part of this code could you change without help right now? Show me.")
+    lines.extend(["", "## Questions to ask", "", *questions])
     data = ("\n".join(lines) + "\n").encode("utf-8")
     fd = os.open(Path(out) / "instructor-notes.md", os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, "wb") as stream:
